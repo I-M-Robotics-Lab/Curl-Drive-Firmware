@@ -1,0 +1,13 @@
+
+curl-drive
+curl-drive temp raw
+curl-drive temp kelvin
+curl-drive temp celcius
+curl-drive temp Fahrenheit
+curl-drive power raw
+curl-drive power voltage
+curl-drive led --on
+curl-drive led --off
+curl-drive led toggle --off
+curl-drive led toggle --start --freq=<int>
+curl-drive driver status
