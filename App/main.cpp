@@ -26,7 +26,6 @@ void Main() {
     HAL_Delay(500);
     led::stopToggle();
 
-    //controller.startCalibrate();
     led::setLed(!ok ? 1 : 0);
     HAL_Delay(1000);
 
@@ -44,12 +43,9 @@ void Main() {
         //foc::status.Vq = 0;
 
         //usb::println(", Iq = ", foc::status.Iq);
-        usb::println("cA = ", foc::status.cA, ", cB = ", foc::status.cB, ", cC = ", foc::status.cC);
-        //foc::status.phaseA = 9;
-        //foc::status.phaseA = -4.5;
-        //foc::status.phaseA = -4.5;
+        //usb::println("cA = ", foc::status.cA, ", cB = ", foc::status.cB, ", cC = ", foc::status.cC);
+        usb::println("fv = ", controller.status().curr_vel, ", tv = ", controller.status().TarVel);
 
-        controller.execute();
 
         cli_poll();
         HAL_Delay(50);

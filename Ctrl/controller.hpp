@@ -4,12 +4,17 @@
 #include "tim.h"
 #include "adc.h"
 
+constexpr float TWO_PI = 6.28318530718f;
+
 class Controller {
 public:
-    enum class Mode : uint8_t {
-        Calibrating,
-        Run
-    };
+	enum class Mode : uint8_t {
+	    Idle,
+	    Torque,
+	    Velocity,
+	    Position,
+	    Calibrating
+	};
 
     enum class TorqueMode : uint8_t {
         Voltage,
@@ -17,7 +22,7 @@ public:
     };
 
     struct Status {
-        Mode mode{Mode::Run};
+        Mode mode{Mode::Idle};
         TorqueMode torque_mode{TorqueMode::Voltage};
         bool isCalibrated{false};
         bool armed{false};
@@ -28,6 +33,16 @@ public:
         uint16_t curr_mechAng{0};
         uint16_t prev_mechAng{0};
 
+        int32_t revolution_count{0};
+        float curr_vel_raw{0.0f};  // rpm
+        float curr_vel{0.0f};      // rpm filtered
+        float prev_vel{0.0f};
+
+        float vel_int{0.0f};
+        float pos_int{0.0f};
+
+        float TarVel{0.0f}; //rpm
+        float TarPos{0.0f};
 
         uint32_t calib_tick{0};
         uint16_t calib_mech_start{0};
@@ -40,6 +55,7 @@ public:
         bool     is_calibrated{false};
 
         uint32_t current_loop_freq{20000}; //Hz
+        uint32_t vel_loop_freq{1000}; //Hz
         uint16_t pole_pairs{14}; // pair
         int8_t   elec_s{-1}; // 1, -1
         uint16_t elec_offset{0}; // 14-bit
@@ -51,13 +67,17 @@ public:
 
         float max_voltage{16.0f}; // Volts
         float max_current{2.0f}; // Amps
+        float max_vel{500.0f}; // rpm
 
         float    i_kp{0.0f};
         float    i_ki{0.0f};
-        float    v_kp{0.0f};
+        float    v_kp{0.08f};
         float    v_ki{0.0f};
         float    p_kp{0.0f};
         float    p_ki{0.0f};
+        float 	 p_kd{0.0f};
+
+        float 	 vel_alpha{0.01f};
 
         uint16_t offset_a{2048};
         uint16_t offset_b{2048};
@@ -74,6 +94,7 @@ public:
 
     void configure(const Config& c);
     void set_current_loop_freq(uint32_t hz);
+    void set_velocity_loop_freq(uint32_t hz);
     void init();
 
     void arm();
@@ -82,6 +103,10 @@ public:
     void calibrate();
 
     void execute();
+
+    void current_loop();
+    void position_loop();
+    void velocity_loop();
 
     void write_pwm();
     void process_encoder();

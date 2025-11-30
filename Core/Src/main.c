@@ -105,6 +105,7 @@ int main(void)
   MX_USB_Device_Init();
   MX_TIM7_Init();
   MX_TIM2_Init();
+  MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
 
   Main();

@@ -65,6 +65,18 @@ void Controller::set_current_loop_freq(uint32_t hz) {
     __HAL_TIM_ENABLE(&htim1);
 }
 
+void Controller::set_velocity_loop_freq(uint32_t hz) {
+    const uint32_t tim_clk = 144000000u;
+    const uint32_t den     = (hz > 0u) ? hz : 1u;
+    uint32_t arr_u32       = (tim_clk / 144u) / den;
+    if (arr_u32 < 2u) arr_u32 = 2u;
+    const uint16_t arr     = static_cast<uint16_t>(arr_u32 - 1u);
+
+    __HAL_TIM_DISABLE(&htim6);
+    __HAL_TIM_SET_AUTORELOAD(&htim6, arr);
+    __HAL_TIM_ENABLE(&htim6);
+}
+
 void Controller::disarm() {
     if (drv.setCoast()) {
         foc::status.TarId  = 0.0f;
@@ -114,7 +126,7 @@ void Controller::calibrate() {
 
     uint32_t acc = 0;
     for (uint16_t i = 0; i < 1000; i++) {
-    	acc += status_.mechAng;
+    	acc += status_.curr_mechAng;
         HAL_Delay(1);
     }
     uint16_t mech_avg = static_cast<uint16_t>(acc / 1000u);
@@ -139,7 +151,7 @@ void Controller::calibrate() {
     //Fine Offset Alignment
     acc = 0;
     for (uint16_t i = 0; i < 1000; i++) {
-        acc += status_.mechAng;
+        acc += status_.curr_mechAng;
         HAL_Delay(1);
     }
     mech_avg = static_cast<uint16_t>(acc / 1000u);
@@ -164,7 +176,7 @@ void Controller::calibrate() {
 
     usb::println("Calibration End, Eoffset: ", cfg_.elec_offset);
 
-    status_.mode = Mode::Run;
+    status_.mode = Mode::Idle;
 }
 
 void Controller::init() {
@@ -184,6 +196,13 @@ void Controller::init() {
     __HAL_ADC_DISABLE_IT(&hadc2, ADC_IT_JEOS | ADC_IT_JEOC);
     __HAL_TIM_DISABLE_IT(&htim1, TIM_IT_UPDATE);
     __HAL_ADC_CLEAR_FLAG(&hadc2, ADC_FLAG_JEOC | ADC_FLAG_JEOS | ADC_FLAG_OVR | ADC_FLAG_AWD1);
+
+    set_velocity_loop_freq(cfg_.vel_loop_freq);
+
+    __HAL_TIM_SET_COUNTER(&htim6, 0u);
+    __HAL_TIM_CLEAR_FLAG(&htim6, TIM_FLAG_UPDATE);
+    __HAL_TIM_ENABLE_IT(&htim6, TIM_IT_UPDATE);
+    HAL_TIM_Base_Start_IT(&htim6);
 
     drv.clearFaults();
     HAL_Delay(1);
@@ -242,26 +261,6 @@ void Controller::init() {
 
 
 
-void Controller::execute() {
-    if (!status_.armed) return;
-
-    if (status_.isCalibrated) {
-        switch (status_.mode) {
-            case Mode::Run:
-                break;
-            case Mode::Calibrating:
-                break;
-        }
-    } else {
-        switch (status_.mode) {
-            case Mode::Run:
-                break;
-            case Mode::Calibrating:
-                break;
-        }
-    }
-}
-
 
 
 
@@ -271,6 +270,14 @@ void Controller::execute() {
 
 
 void Controller::write_pwm() {
+
+    if (!status_.armed) {
+        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0);
+        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, 0);
+        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
+        return;
+    }
+
     const uint16_t arr  = __HAL_TIM_GET_AUTORELOAD(&htim1);
     float vbat = vbat::volts();
     foc::status.vbat = vbat;
@@ -327,13 +334,15 @@ void Controller::process_encoder() {
 
     if (dt != 0u && dTheta_mech != -8192) {
         const float dt_sec = static_cast<float>(dt) * 1.25e-7f;
-        const float dTheta_rad = static_cast<float>(dTheta_mech) * (TWO_PI / 16384.0f);
-        status_.velocity_raw = dTheta_rad / dt_sec;
+        const float dTheta_revs = static_cast<float>(dTheta_mech) / 16384.0f;
+        const float revs_per_sec = dTheta_revs / dt_sec;
+        status_.curr_vel_raw = revs_per_sec * 60.0f;
 
-        const float alpha = dt_sec / (cfg_.velocity_lpf_Tf + dt_sec);
-        status_.velocity = status_.velocity_lpf_prev + alpha * (status_.velocity_raw - status_.velocity_lpf_prev);
-        status_.velocity_lpf_prev = status_.velocity;
+        const float alpha = dt_sec / (cfg_.vel_alpha + dt_sec);
+        status_.curr_vel = status_.prev_vel + alpha * (status_.curr_vel_raw - status_.prev_vel);
+        status_.prev_vel = status_.curr_vel;
     }
+
 
     // Elec Prediction within the encoder reading gap -- kind of useless
     /*
@@ -345,7 +354,6 @@ void Controller::process_encoder() {
    		aheadTheta = ( dTheta * ( (8000000 / (int)cfg_.current_loop_freq) - 80 ) ) / (int)dt;
    	}
      */
-
 
     status_.curr_mechAng = mechAng;
     status_.currT = T;
@@ -367,7 +375,7 @@ void Controller::calibration_step() {
 
     (void)encoder.updateAngle();
     const auto& ad = encoder.angleData();
-    status_.mechAng = ad.rectifiedAngle;
+    status_.curr_mechAng = ad.rectifiedAngle;
 }
 
 
@@ -376,17 +384,17 @@ extern "C" void TIM1_UP_TIM16_IRQHandler(void) {
         if (__HAL_TIM_GET_IT_SOURCE(&htim1, TIM_IT_UPDATE) != RESET) {
             __HAL_TIM_CLEAR_IT(&htim1, TIM_IT_UPDATE);
 
-            if (controller.status().mode == Controller::Mode::Run) {
-            	controller.process_encoder();
-
-            } else if (controller.status().mode == Controller::Mode::Calibrating) {
+            if (controller.status().mode == Controller::Mode::Calibrating) {
             	controller.calibration_step();
+            } else {
+            	controller.process_encoder();
             }
         }
     }
     HAL_TIM_IRQHandler(&htim1);
 }
 
+// 20kHz current loop
 extern "C" void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc) {
     if (hadc != &hadc2) return;
 
@@ -420,25 +428,94 @@ extern "C" void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc) {
     //foc part
     ///
 
-    if (controller.status().mode == Controller::Mode::Run) {
-        if (controller.status().torque_mode == Controller::TorqueMode::Current) {
-
-            // current loop part
-        	//foc::InDqTransform();
-        	//foc::DqTransform();
-
-        } else if (controller.status().torque_mode == Controller::TorqueMode::Voltage) {
-
-            foc::DqTransform();
-
-        }
-    } else if (controller.status().mode == Controller::Mode::Calibrating) {
-        constexpr float DIRECT_PHASE_SIGNAL = -3.14159f; // Special Mmode for direct phase ABC control
+    if (controller.status().mode == Controller::Mode::Calibrating) {
+        constexpr float DIRECT_PHASE_SIGNAL = -3.14159f;
         if (foc::status.Vd != DIRECT_PHASE_SIGNAL || foc::status.Vq != DIRECT_PHASE_SIGNAL) {
             foc::InDqTransform();
             foc::DqTransform();
         }
+    } else if (controller.status().mode == Controller::Mode::Idle) {
+        foc::status.Vd = 0.0f;
+        foc::status.Vq = 0.0f;
+        foc::status.TarId = 0.0f;
+        foc::status.TarIq = 0.0f;
+        foc::status.i_int_d = 0.0f;
+        foc::status.i_int_q = 0.0f;
+        controller.status().TarVel = 0.0f;
+        controller.status().TarPos = 0.0f;
+        controller.status().vel_int = 0.0f;
+        controller.status().pos_int = 0.0f;
+        foc::DqTransform();
+    } else { // Torque, Velocity, Position Mode
+        if (controller.status().torque_mode == Controller::TorqueMode::Current) {
+            controller.current_loop();
+        } else if (controller.status().torque_mode == Controller::TorqueMode::Voltage) {
+        	foc::DqTransform();
+        }
     }
 
     controller.write_pwm();
+}
+
+// 20kHz Current Loop
+void Controller::current_loop() {
+
+	// Current Loop Implementation Later
+
+    foc::InDqTransform();
+    foc::DqTransform();
+}
+
+// 1kHz Vel and Pos loop
+void Controller::velocity_loop() {
+
+    if (status_.mode == Mode::Torque) {
+        return;
+    }
+
+    const float vel_error = status_.TarVel - status_.curr_vel;
+    const float dt = 1.0f / cfg_.vel_loop_freq;
+
+    status_.vel_int += vel_error * dt;
+
+    const float vel_p_term = cfg_.v_kp * vel_error;
+    const float vel_i_term = cfg_.v_ki * status_.vel_int;
+    const float vel_output = vel_p_term + vel_i_term;
+
+    if (status_.torque_mode == Controller::TorqueMode::Voltage) {
+        float vq = vel_output;
+        if (vq > cfg_.max_voltage) vq = cfg_.max_voltage;
+        if (vq < -cfg_.max_voltage) vq = -cfg_.max_voltage;
+
+        foc::status.Vd = 0.0f;
+        foc::status.Vq = -vq;
+    } else {
+        float iq = vel_output;
+        if (iq > cfg_.max_current) iq = cfg_.max_current;
+        if (iq < -cfg_.max_current) iq = -cfg_.max_current;
+
+        foc::status.TarId = 0.0f;
+        foc::status.TarIq = -iq;
+    }
+}
+
+void Controller::position_loop() {
+    // Position PID here
+}
+
+extern "C" void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* h) {
+    if (h->Instance == TIM6) {
+        if (controller.status().mode == Controller::Mode::Position) {
+            controller.position_loop();
+        }
+
+        if (controller.status().mode == Controller::Mode::Velocity ||
+            controller.status().mode == Controller::Mode::Position) {
+            controller.velocity_loop();
+        }
+    }
+
+    if (h->Instance == TIM7) {
+        HAL_GPIO_TogglePin(LED_IND_GPIO_Port, LED_IND_Pin);
+    }
 }
