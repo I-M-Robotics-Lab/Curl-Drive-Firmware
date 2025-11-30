@@ -92,11 +92,89 @@ void Controller::arm() {
 }
 
 void Controller::calibrate() {
+    status_.mode = Mode::Calibrating;
 
+    usb::println("Calibration Start");
+
+    foc::status.currTheta = 0;
+    foc::status.prevTheta = 0;
+    foc::status.currT = 0;
+    foc::status.prevT = 0;
+
+    cfg_.elec_offset = 0;
+
+    foc::status.Vd = -3.14159f; //activate special phase control mode
+    foc::status.Vq = -3.14159f;
+
+    //Rough Offset Alignment
+    foc::status.phaseA =  5.0f;
+    foc::status.phaseB = -2.5f;
+    foc::status.phaseC = -2.5f;
+    HAL_Delay(500);
+
+    uint32_t acc = 0;
+    for (uint16_t i = 0; i < 1000; i++) {
+    	acc += status_.mechAng;
+        HAL_Delay(1);
+    }
+    uint16_t mech_avg = static_cast<uint16_t>(acc / 1000u);
+    uint16_t elec_measured = static_cast<uint16_t>((mech_avg * cfg_.pole_pairs * cfg_.elec_s) & 0x3FFFu);
+    cfg_.elec_offset = static_cast<uint16_t>((0u - elec_measured) & 0x3FFFu);
+
+    HAL_Delay(500);
+
+    foc::status.Vd = 3.0f;
+    foc::status.Vq = 0.0f;
+
+    HAL_Delay(500);
+
+    foc::status.Vd = -3.14159f; //activate special phase control mode
+    foc::status.Vq = -3.14159f;
+
+    foc::status.phaseA =  5.0f;
+    foc::status.phaseB = -2.5f;
+    foc::status.phaseC = -2.5f;
+    HAL_Delay(500);
+
+    //Fine Offset Alignment
+    acc = 0;
+    for (uint16_t i = 0; i < 1000; i++) {
+        acc += status_.mechAng;
+        HAL_Delay(1);
+    }
+    mech_avg = static_cast<uint16_t>(acc / 1000u);
+    uint16_t elec_fine = mech_to_elec(mech_avg);
+    uint16_t fine_correction = static_cast<uint16_t>((0u - elec_fine) & 0x3FFFu);
+    cfg_.elec_offset = static_cast<uint16_t>((cfg_.elec_offset + fine_correction) & 0x3FFFu);
+
+    cfg_.is_calibrated = true;
+    status_.isCalibrated = true;
+
+    foc::status.Vd = 0.0f;
+    foc::status.Vq = 0.0f;
+    foc::status.phaseA = 0.0f;
+    foc::status.phaseB = 0.0f;
+    foc::status.phaseC = 0.0f;
+    foc::status.currTheta = 0;
+    foc::status.prevTheta = 0;
+    foc::status.currT = 0;
+    foc::status.prevT = 0;
+
+    config_write();
+
+    usb::println("Calibration End, Eoffset: ", cfg_.elec_offset);
+
+    status_.mode = Mode::Run;
 }
 
 void Controller::init() {
-	(void)config_read();
+	bool config_valid = config_read();
+
+    if (config_valid && cfg_.is_calibrated) {
+        status_.isCalibrated = true;
+    } else {
+        status_.isCalibrated = false;
+    }
 
 	set_current_loop_freq(cfg_.current_loop_freq);
     __HAL_TIM_MOE_DISABLE(&htim1);
@@ -230,31 +308,66 @@ void Controller::process_encoder() {
     (void)encoder.updateAngle();
 
     const auto& ad = encoder.angleData();
-    const uint16_t elec = mech_to_elec(ad.rectifiedAngle);
-    status_.mechAng = ad.rectifiedAngle;
-    status_.elecAng = ad.rectifiedAngle;
+    uint16_t mechAng = (uint16_t)ad.rectifiedAngle;
+    uint32_t T = (uint32_t)ad.tstamp;
+    uint16_t elec = mech_to_elec(mechAng);
+
+    status_.prevT = status_.currT;
+    status_.prev_mechAng = status_.curr_mechAng;
 
     foc::status.prevTheta = foc::status.currTheta;
     foc::status.prevT     = foc::status.currT;
-    uint32_t currT = (uint32_t)ad.tstamp;
 
-    if (status_.isCalibrated) {
+    uint32_t dt = T - status_.prevT;
+    int16_t dTheta_mech = (int16_t)((((int)mechAng - (int)status_.prev_mechAng + 8192) & 0x3FFF) - 8192);
 
-    	uint32_t dt = currT - (uint32_t)foc::status.prevT;
-    	int16_t dTheta = (int16_t)((((int)elec - (int)foc::status.prevTheta + 8192) & 0x3FFF) - 8192);
-    	int aheadTheta = 0;
-
-    	if (dt != 0u && dTheta != -8192) {
-    		aheadTheta = ( dTheta * ( (8000000 / (int)cfg_.current_loop_freq) - 80 ) ) / (int)dt;
-    	}
-
-        foc::status.currTheta = static_cast<uint16_t>(elec & 0x3FFF);
-        foc::status.currT     = currT;
-
-    } else {
-        foc::status.currTheta = static_cast<uint16_t>((uint16_t)(foc::status.currTheta + (uint16_t)status_.dtheta_per_isr) & 0x3FFFu);
-        foc::status.currT = foc::status.prevT + status_.ticks_per_isr;
+    if (abs(dTheta_mech) > 12288) {
+        status_.revolution_count += (dTheta_mech < 0) ? 1 : -1;
     }
+
+    if (dt != 0u && dTheta_mech != -8192) {
+        const float dt_sec = static_cast<float>(dt) * 1.25e-7f;
+        const float dTheta_rad = static_cast<float>(dTheta_mech) * (TWO_PI / 16384.0f);
+        status_.velocity_raw = dTheta_rad / dt_sec;
+
+        const float alpha = dt_sec / (cfg_.velocity_lpf_Tf + dt_sec);
+        status_.velocity = status_.velocity_lpf_prev + alpha * (status_.velocity_raw - status_.velocity_lpf_prev);
+        status_.velocity_lpf_prev = status_.velocity;
+    }
+
+    // Elec Prediction within the encoder reading gap -- kind of useless
+    /*
+    uint32_t dt = currT - (uint32_t)foc::status.prevT;
+    int16_t dTheta = (int16_t)((((int)elec - (int)foc::status.prevTheta + 8192) & 0x3FFF) - 8192);
+    int aheadTheta = 0;
+
+    if (dt != 0u && dTheta != -8192) {
+   		aheadTheta = ( dTheta * ( (8000000 / (int)cfg_.current_loop_freq) - 80 ) ) / (int)dt;
+   	}
+     */
+
+
+    status_.curr_mechAng = mechAng;
+    status_.currT = T;
+    status_.elecAng = elec;
+    foc::status.currTheta = elec;
+    foc::status.currT     = T;
+
+
+
+
+}
+
+void Controller::calibration_step() {
+    foc::status.prevTheta = foc::status.currTheta;
+    foc::status.prevT = foc::status.currT;
+
+    foc::status.currTheta = (foc::status.currTheta + cfg_.dtheta_per_isr) & 0x3FFFu;
+    foc::status.currT = foc::status.prevT + cfg_.ticks_per_isr;
+
+    (void)encoder.updateAngle();
+    const auto& ad = encoder.angleData();
+    status_.mechAng = ad.rectifiedAngle;
 }
 
 
@@ -263,20 +376,12 @@ extern "C" void TIM1_UP_TIM16_IRQHandler(void) {
         if (__HAL_TIM_GET_IT_SOURCE(&htim1, TIM_IT_UPDATE) != RESET) {
             __HAL_TIM_CLEAR_IT(&htim1, TIM_IT_UPDATE);
 
-            controller.process_encoder();
+            if (controller.status().mode == Controller::Mode::Run) {
+            	controller.process_encoder();
 
-
-/*
-            foc::status.prevTheta = foc::status.currTheta;
-            foc::status.prevT     = foc::status.currT;
-
-            constexpr uint16_t MASK  = 0x3FFFu;    // 14-bit wrap
-            constexpr uint16_t DELTA = 16u;        // counts per ISR (~64/16384 elec rev per tick)
-            constexpr uint32_t TICKS_PER_ISR = 200u; // 50 µs at 125 ns/tick (20 kHz loop)
-
-            foc::status.currTheta = static_cast<uint16_t>((static_cast<uint16_t>(foc::status.currTheta) + DELTA) & MASK);
-            foc::status.currT    += TICKS_PER_ISR;
-*/
+            } else if (controller.status().mode == Controller::Mode::Calibrating) {
+            	controller.calibration_step();
+            }
         }
     }
     HAL_TIM_IRQHandler(&htim1);
@@ -314,8 +419,26 @@ extern "C" void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc) {
     ///
     //foc part
     ///
-    foc::InDqTransform();
-    foc::DqTransform();
+
+    if (controller.status().mode == Controller::Mode::Run) {
+        if (controller.status().torque_mode == Controller::TorqueMode::Current) {
+
+            // current loop part
+        	//foc::InDqTransform();
+        	//foc::DqTransform();
+
+        } else if (controller.status().torque_mode == Controller::TorqueMode::Voltage) {
+
+            foc::DqTransform();
+
+        }
+    } else if (controller.status().mode == Controller::Mode::Calibrating) {
+        constexpr float DIRECT_PHASE_SIGNAL = -3.14159f; // Special Mmode for direct phase ABC control
+        if (foc::status.Vd != DIRECT_PHASE_SIGNAL || foc::status.Vq != DIRECT_PHASE_SIGNAL) {
+            foc::InDqTransform();
+            foc::DqTransform();
+        }
+    }
 
     controller.write_pwm();
 }

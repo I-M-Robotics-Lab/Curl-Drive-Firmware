@@ -7,20 +7,6 @@
 namespace foc
 {
 
-struct FOCconfig
-{
-    float i_kp{0.0f};
-    float i_ki{0.0f};
-    float v_kp{0.0f};
-    float v_ki{0.0f};
-    float p_kp{0.0f};
-    float p_ki{0.0f};
-
-
-    float shunt_res = {0.003f};
-    uint16_t adc_gain = {40};
-};
-
 struct FOCstatus
 {
     uint16_t currTheta{0};

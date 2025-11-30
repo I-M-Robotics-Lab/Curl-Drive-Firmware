@@ -7,7 +7,6 @@ namespace foc
 {
 
 FOCstatus status{};
-static FOCconfig config{};
 
 static inline uint16_t tim1_arr() {
     return __HAL_TIM_GET_AUTORELOAD(&htim1);
@@ -16,8 +15,6 @@ static inline uint16_t tim1_arr() {
 static inline float clampf(float x, float lo, float hi) {
     return x < lo ? lo : (x > hi ? hi : x);
 }
-
-
 
 AB ClarkeTransform() noexcept
 {
@@ -84,27 +81,6 @@ void DqTransform() noexcept
     AB ab = InParkTransform(status.Vd, status.Vq);
     ABC abc = InClarkeTransform(ab.a, ab.b);
     svpwm(abc.a, abc.b, abc.c);
-}
-
-
-void currentLoop() noexcept
-{
-    const uint32_t now = status.currT;
-    const uint32_t d   = now - status.prevT;
-    const float dt     = static_cast<float>(d) * 1.25e-7f;
-
-    InDqTransform();
-
-    const float ed = status.TarId - status.Id;
-    const float eq = status.TarIq - status.Iq;
-
-    status.i_int_d += config.i_ki * ed * dt;
-    status.i_int_q += config.i_ki * eq * dt;
-
-    status.Vd = config.i_kp * ed + status.i_int_d;
-    status.Vq = config.i_kp * eq + status.i_int_q;
-
-    DqTransform();
 }
 
 }

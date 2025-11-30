@@ -25,10 +25,10 @@ namespace temp {
     const float c  = static_cast<float>(code);
     const float fs = static_cast<float>(kFS);
 
-    if (c <= 0.5f)      return 99999.9f;
-    if (c >= fs - 0.5f) return 0.0f;
+    if (c <= 0.5f)      return 0.0f;
+    if (c >= fs - 0.5f) return 99999.9f;
 
-    return kRfixed * ((fs - c) / c);
+    return kRfixed * (c / (fs - c));
   }
 
   static inline float r_to_kelvin(float R) {

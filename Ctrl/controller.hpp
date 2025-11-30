@@ -11,31 +11,46 @@ public:
         Run
     };
 
+    enum class TorqueMode : uint8_t {
+        Voltage,
+        Current
+    };
+
     struct Status {
         Mode mode{Mode::Run};
+        TorqueMode torque_mode{TorqueMode::Voltage};
         bool isCalibrated{false};
         bool armed{false};
 
+        uint32_t prevT{0};
+        uint32_t currT{0};
         uint16_t elecAng{0};
-        uint16_t mechAng{0};
+        uint16_t curr_mechAng{0};
+        uint16_t prev_mechAng{0};
 
-        uint16_t dtheta_per_isr{5};
-        uint16_t ticks_per_isr{320};
+
+        uint32_t calib_tick{0};
+        uint16_t calib_mech_start{0};
 
     };
 
     struct Config {
         uint32_t valid_SOF{0xA55A5AA5u};
 
-        uint32_t current_loop_freq{25000}; //Hz
+        bool     is_calibrated{false};
+
+        uint32_t current_loop_freq{20000}; //Hz
         uint16_t pole_pairs{14}; // pair
         int8_t   elec_s{-1}; // 1, -1
-        uint16_t elec_offset{5067}; // 14-bit
+        uint16_t elec_offset{0}; // 14-bit
         float    shunt_res{0.003f}; // ohms
         float    adc_gain{40.0f};
 
-        float max_voltage{24.0f}; // Volts
-        float max_current{5.0f}; // Amps
+        uint16_t dtheta_per_isr{5}; //openloop
+        uint16_t ticks_per_isr{320};
+
+        float max_voltage{16.0f}; // Volts
+        float max_current{2.0f}; // Amps
 
         float    i_kp{0.0f};
         float    i_ki{0.0f};
@@ -70,6 +85,7 @@ public:
 
     void write_pwm();
     void process_encoder();
+    void calibration_step();
     uint16_t mech_to_elec(uint16_t mech_theta14) const;
 
     bool config_write();

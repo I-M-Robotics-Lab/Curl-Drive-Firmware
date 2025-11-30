@@ -43,9 +43,8 @@ void Main() {
         //foc::status.Vd = 10;
         //foc::status.Vq = 0;
 
-        //usb::println(",a=", foc::status.currTheta);
         //usb::println(", Iq = ", foc::status.Iq);
-        //usb::println("cA = ", foc::status.cA, ", cB = ", foc::status.cB, ", cC = ", foc::status.cC);
+        usb::println("cA = ", foc::status.cA, ", cB = ", foc::status.cB, ", cC = ", foc::status.cC);
         //foc::status.phaseA = 9;
         //foc::status.phaseA = -4.5;
         //foc::status.phaseA = -4.5;

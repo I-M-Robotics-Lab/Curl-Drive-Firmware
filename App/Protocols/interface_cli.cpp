@@ -192,7 +192,7 @@ static inline void cmd_enc_angle(FlagsView flags) {
 static inline void cmd_enc_is_armed() { usb::println("armed=", controller.isArmed()); }
 static inline void cmd_con_phases() { usb::println("Phase A=", foc::status.phaseA, "  Phase B=", foc::status.phaseB, "  Phase C=", foc::status.phaseC); return; }
 static inline void cmd_con_curr() { usb::println("Iq=", foc::status.Iq, "  Id=", foc::status.Id); return; }
-static inline void cmd_con_angle() { usb::println("Electrical Angle=", foc::status.currTheta); return; }
+static inline void cmd_con_angle() { usb::println("Electrical Angle=", foc::status.currTheta, "Mechanical Angle=", controller.status().mechAng); return; }
 static inline void cmd_con_adcoffset() { usb::println("offset_A=", controller.config().offset_a, "  offset_B=", controller.config().offset_b, "  offset_C=", controller.config().offset_c); return; }
 static inline void cmd_con_adc() { usb::println("cA=", foc::status.cA, "  cB=", foc::status.cB, "  cC=", foc::status.cC); return; }
 static inline void cmd_con_mode() {
@@ -214,6 +214,7 @@ static inline void cmd_con_config(FlagsView flags) {
     if (flags.get("imax", v)) usb::println("imax:", cfg.max_current, " A");
     if (flags.get("all", v)) usb::println("freq:", cfg.current_loop_freq, " Hz, pp:", cfg.pole_pairs, ", sgn:", int(cfg.elec_s), ", eoff:", cfg.elec_offset, ", rsh:", cfg.shunt_res, " ohm, adcg:", cfg.adc_gain, ", vmax:", cfg.max_voltage, " V, imax:", cfg.max_current, " A");
 }
+
 static inline void cmd_con_config_write(FlagsView flags) {
 	auto& cfg = controller.config();
     int freq_i, pp_i, eoff_i, sgn_i;
@@ -243,6 +244,9 @@ static inline void cmd_con_set(FlagsView flags) {
 	if (flags.get("Vq", vq)) { foc::status.Vq = vq; }
 	return;
 }
+
+static inline void cmd_con_calibrate() { controller.calibrate(); }
+static inline void cmd_con_iscalibrated() { usb::println(controller.status().isCalibrated); }
 
 static inline void commands(std::string_view key, FlagsView flags)
 {
@@ -275,6 +279,9 @@ static inline void commands(std::string_view key, FlagsView flags)
     if (key == "curl-drive controller set")     { (void)cmd_con_set(flags); return; }
     if (key == "curl-drive controller config")  { (void)cmd_con_config(flags); return; }
     if (key == "curl-drive controller writeconfig")  { (void)cmd_con_config_write(flags); return; }
+
+    if (key == "curl-drive controller calibrate") { (void)cmd_con_calibrate(); return; }
+    if (key == "curl-drive controller iscalibrated") { (void)cmd_con_iscalibrated(); return; }
 }
 
 
