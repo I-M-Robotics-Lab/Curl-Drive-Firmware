@@ -261,27 +261,27 @@ static inline void cmd_con_calibrate() { controller.calibrate(); }
 static inline void cmd_con_iscalibrated() { usb::println(controller.status().isCalibrated); }
 
 // Control Modes
+
 static inline void cmd_con_idle() { controller.status().mode = Controller::Mode::Idle; }
 static inline void cmd_con_torque(FlagsView flags) {
-    controller.status().mode = Controller::Mode::Torque;
-    float vd, vq, id, iq;
-    if (controller.status().torque_mode == Controller::TorqueMode::Voltage) {
-        if (flags.get("Vd", vd)) foc::status.Vd = vd;
-        if (flags.get("Vq", vq)) foc::status.Vq = vq;
-    } else {
-        if (flags.get("Id", id)) foc::status.TarId = id;
-        if (flags.get("Iq", iq)) foc::status.TarIq = iq;
-    }
+    float d = 0.0f, q = 0.0f;
+    flags.get("Vd", d);
+    flags.get("Vq", q);
+    flags.get("Id", d);
+    flags.get("Iq", q);
+    controller.set_torque(d, q);
 }
 static inline void cmd_con_velocity(FlagsView flags) {
-    controller.status().mode = Controller::Mode::Velocity;
-    float vel;
-    if (flags.get("vel", vel)) controller.status().TarVel = vel;
+    float vel = 0.0f;
+    if (flags.get("vel", vel)) {
+        controller.set_velocity(vel);
+    }
 }
 static inline void cmd_con_position(FlagsView flags) {
-    controller.status().mode = Controller::Mode::Position;
-    float pos;
-    if (flags.get("pos", pos)) controller.status().TarPos = pos;
+    float pos = 0.0f;
+    if (flags.get("pos", pos)) {
+        controller.set_position(pos);
+    }
 }
 
 static inline void commands(std::string_view key, FlagsView flags)

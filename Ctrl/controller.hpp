@@ -38,6 +38,9 @@ public:
         float curr_vel{0.0f};      // rpm filtered
         float prev_vel{0.0f};
 
+        float curr_pos{0.0f}; // degrees
+        float prev_pos{0.0f};
+
         float vel_int{0.0f};
         float pos_int{0.0f};
 
@@ -78,6 +81,7 @@ public:
         float 	 p_kd{0.0f};
 
         float 	 vel_alpha{0.01f};
+        float    pos_alpha{0.01f};
 
         uint16_t offset_a{2048};
         uint16_t offset_b{2048};
@@ -107,6 +111,10 @@ public:
     void current_loop();
     void position_loop();
     void velocity_loop();
+
+    void set_torque(float d_val, float q_val);
+    void set_velocity(float vel);
+    void set_position(float pos);
 
     void write_pwm();
     void process_encoder();

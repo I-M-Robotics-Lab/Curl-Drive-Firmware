@@ -328,8 +328,10 @@ void Controller::process_encoder() {
     uint32_t dt = T - status_.prevT;
     int16_t dTheta_mech = (int16_t)((((int)mechAng - (int)status_.prev_mechAng + 8192) & 0x3FFF) - 8192);
 
-    if (abs(dTheta_mech) > 12288) {
-        status_.revolution_count += (dTheta_mech < 0) ? 1 : -1;
+    if (status_.prev_mechAng > 12288 && mechAng < 4096) {
+        status_.revolution_count++;
+    } else if (status_.prev_mechAng < 4096 && mechAng > 12288) {
+        status_.revolution_count--;
     }
 
     if (dt != 0u && dTheta_mech != -8192) {
@@ -343,6 +345,11 @@ void Controller::process_encoder() {
         status_.prev_vel = status_.curr_vel;
     }
 
+    const float position_raw = static_cast<float>(status_.revolution_count) * 360.0f +
+                              (static_cast<float>(mechAng) / 16384.0f) * 360.0f;
+
+    status_.curr_pos = status_.prev_pos + cfg_.pos_alpha * (position_raw - status_.prev_pos);
+    status_.prev_pos = status_.curr_pos;
 
     // Elec Prediction within the encoder reading gap -- kind of useless
     /*
@@ -500,7 +507,58 @@ void Controller::velocity_loop() {
 }
 
 void Controller::position_loop() {
-    // Position PID here
+    const float pos_error = status_.TarPos - status_.curr_pos;
+    const float dt = 1.0f / cfg_.vel_loop_freq;
+
+    status_.pos_int += pos_error * dt;
+
+    const float pos_p_term = cfg_.p_kp * pos_error;
+    const float pos_i_term = cfg_.p_ki * status_.pos_int;
+    const float pos_d_term = cfg_.p_kd * status_.curr_vel;
+
+    const float pos_output = pos_p_term + pos_i_term - pos_d_term;
+
+    float tar_vel = pos_output;
+    if (tar_vel > cfg_.max_vel) tar_vel = cfg_.max_vel;
+    if (tar_vel < -cfg_.max_vel) tar_vel = -cfg_.max_vel;
+
+    status_.TarVel = tar_vel;
+}
+
+void Controller::set_torque(float d_val, float q_val) {
+    status_.mode = Mode::Torque;
+
+    if (status_.torque_mode == TorqueMode::Voltage) {
+        if (d_val > cfg_.max_voltage) d_val = cfg_.max_voltage;
+        if (d_val < -cfg_.max_voltage) d_val = -cfg_.max_voltage;
+        if (q_val > cfg_.max_voltage) q_val = cfg_.max_voltage;
+        if (q_val < -cfg_.max_voltage) q_val = -cfg_.max_voltage;
+
+        foc::status.Vd = d_val;
+        foc::status.Vq = q_val;
+    } else {
+        if (d_val > cfg_.max_current) d_val = cfg_.max_current;
+        if (d_val < -cfg_.max_current) d_val = -cfg_.max_current;
+        if (q_val > cfg_.max_current) q_val = cfg_.max_current;
+        if (q_val < -cfg_.max_current) q_val = -cfg_.max_current;
+
+        foc::status.TarId = d_val;
+        foc::status.TarIq = q_val;
+    }
+}
+
+void Controller::set_velocity(float vel) {
+    status_.mode = Mode::Velocity;
+
+    if (vel > cfg_.max_vel) vel = cfg_.max_vel;
+    if (vel < -cfg_.max_vel) vel = -cfg_.max_vel;
+
+    status_.TarVel = vel;
+}
+
+void Controller::set_position(float pos) {
+    status_.mode = Mode::Position;
+    status_.TarPos = pos;
 }
 
 extern "C" void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* h) {
