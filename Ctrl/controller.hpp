@@ -27,8 +27,8 @@ public:
         bool isCalibrated{false};
         bool armed{false};
 
-        uint32_t prevT{0};
-        uint32_t currT{0};
+        uint32_t prev_T{0};
+        uint32_t curr_T{0};
         uint16_t elecAng{0};
         uint16_t curr_mechAng{0};
         uint16_t prev_mechAng{0};
@@ -39,6 +39,7 @@ public:
         float prev_vel{0.0f};
 
         float curr_pos{0.0f}; // degrees
+        float curr_pos_raw{0.0f};
         float prev_pos{0.0f};
 
         float vel_int{0.0f};
@@ -62,7 +63,7 @@ public:
         uint16_t pole_pairs{14}; // pair
         int8_t   elec_s{-1}; // 1, -1
         uint16_t elec_offset{0}; // 14-bit
-        float    shunt_res{0.003f}; // ohms
+        float    shunt_res{0.02f}; // ohms
         float    adc_gain{40.0f};
 
         uint16_t dtheta_per_isr{5}; //openloop
@@ -74,14 +75,14 @@ public:
 
         float    i_kp{0.0f};
         float    i_ki{0.0f};
-        float    v_kp{0.08f};
-        float    v_ki{0.0f};
-        float    p_kp{0.0f};
+        float    v_kp{0.13f};
+        float    v_ki{0.5f};
+        float    p_kp{1.5f};
         float    p_ki{0.0f};
         float 	 p_kd{0.0f};
 
         float 	 vel_alpha{0.01f};
-        float    pos_alpha{0.01f};
+        float    pos_alpha{0.05f};
 
         uint16_t offset_a{2048};
         uint16_t offset_b{2048};

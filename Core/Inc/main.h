@@ -65,6 +65,8 @@ void Error_Handler(void);
 #define INHB_GPIO_Port GPIOC
 #define INHA_Pin GPIO_PIN_2
 #define INHA_GPIO_Port GPIOC
+#define Hi_Z_Pin GPIO_PIN_3
+#define Hi_Z_GPIO_Port GPIOC
 #define CAL_Pin GPIO_PIN_0
 #define CAL_GPIO_Port GPIOA
 #define DR_EN_Pin GPIO_PIN_1

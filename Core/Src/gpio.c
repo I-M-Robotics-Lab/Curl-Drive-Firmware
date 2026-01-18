@@ -52,19 +52,26 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, Hi_Z_Pin|LED_IND_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, CAL_Pin|DR_EN_Pin|DR_CS_Pin|GPIO_PIN_15, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, AUX_CS_SPI2_Pin|GPIO_PIN_12, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LED_IND_GPIO_Port, LED_IND_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : NRST_Pin */
   GPIO_InitStruct.Pin = NRST_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(NRST_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : Hi_Z_Pin */
+  GPIO_InitStruct.Pin = Hi_Z_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(Hi_Z_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : CAL_Pin DR_EN_Pin DR_CS_Pin PA15 */
   GPIO_InitStruct.Pin = CAL_Pin|DR_EN_Pin|DR_CS_Pin|GPIO_PIN_15;

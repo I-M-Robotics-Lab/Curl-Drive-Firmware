@@ -61,6 +61,7 @@ static inline bool parse_flag_token(char* tok, std::string_view& key, int& iv, f
     }
     return true;
 }
+
 static inline void handleline(
     char* line,
     char* keybuf, size_t keybuf_cap, size_t& keylen_out,

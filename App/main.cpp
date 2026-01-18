@@ -42,11 +42,12 @@ void Main() {
         //foc::status.Vd = 10;
         //foc::status.Vq = 0;
 
+        //usb::println("Angle = ", controller.status().curr_pos_raw, ", Angle1 = ", controller.status().curr_pos);
         //usb::println(", Iq = ", foc::status.Iq);
         //usb::println("cA = ", foc::status.cA, ", cB = ", foc::status.cB, ", cC = ", foc::status.cC);
         //usb::println("fv = ", controller.status().curr_vel, ", tv = ", controller.status().TarVel);
         //usb::println("rev = ", controller.status().revolution_count, ", mech = ", controller.status().curr_mechAng, ", pos = ", controller.status().curr_pos);
-        usb::println("pos =", controller.status().curr_pos, ", tarpos =", controller.status().TarPos);
+        //usb::println("pos =", controller.status().curr_pos, ", tarpos =", controller.status().TarPos);
 
         cli_poll();
         HAL_Delay(50);

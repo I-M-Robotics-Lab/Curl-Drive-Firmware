@@ -72,8 +72,13 @@ void InDqTransform() noexcept
 {
     AB ab = ClarkeTransform();
     DQ dq = ParkTransform(ab.a, ab.b);
-    status.Id = dq.d;
-    status.Iq = dq.q;
+
+    // filter
+    status.Id = status.prevId + status.cur_alpha * (dq.d - status.prevId);
+    status.Iq = status.prevIq + status.cur_alpha * (dq.q - status.prevIq);
+    status.prevId = status.Id;
+    status.prevIq = status.Iq;
+
 }
 
 void DqTransform() noexcept
@@ -82,5 +87,6 @@ void DqTransform() noexcept
     ABC abc = InClarkeTransform(ab.a, ab.b);
     svpwm(abc.a, abc.b, abc.c);
 }
+
 
 }

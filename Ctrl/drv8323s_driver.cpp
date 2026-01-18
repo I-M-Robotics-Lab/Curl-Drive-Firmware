@@ -175,6 +175,16 @@ bool Driver8323s::disable() {
 	return true;
 }
 
+bool Driver8323s::offhighz() {
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, GPIO_PIN_SET);
+	return true;
+}
+
+bool Driver8323s::onhighz() {
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
+	return true;
+}
+
 int Driver8323s::init() {
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_RESET);
@@ -182,6 +192,9 @@ int Driver8323s::init() {
     HAL_Delay(1);
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);
     HAL_Delay(5);
+
+    // Default no High-Z
+    offhighz();
 
     if (!setPwmMode3x()) return 1;
     if (!setCoast()) return 2;
