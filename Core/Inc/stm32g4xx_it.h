@@ -62,6 +62,7 @@ void ADC1_2_IRQHandler(void);
 void USB_LP_IRQHandler(void);
 void TIM6_DAC_IRQHandler(void);
 void TIM7_DAC_IRQHandler(void);
+void FDCAN2_IT0_IRQHandler(void);
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */
