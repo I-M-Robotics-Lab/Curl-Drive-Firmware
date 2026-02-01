@@ -23,17 +23,21 @@ public:
 
     struct Status {
         Mode mode{Mode::Idle};
-        TorqueMode torque_mode{TorqueMode::Voltage};
+
         bool isCalibrated{false};
         bool armed{false};
 
         uint32_t prev_T{0};
         uint32_t curr_T{0};
         uint16_t elecAng{0};
+        uint16_t raw_mechAng{0};
         uint16_t curr_mechAng{0};
         uint16_t prev_mechAng{0};
 
         int32_t revolution_count{0};
+
+        float pos_zero_offset = 0.0f;
+
         float curr_vel_raw{0.0f};  // rpm
         float curr_vel{0.0f};      // rpm filtered
         float prev_vel{0.0f};
@@ -47,16 +51,13 @@ public:
 
         float TarVel{0.0f}; //rpm
         float TarPos{0.0f};
-
-        uint32_t calib_tick{0};
-        uint16_t calib_mech_start{0};
-
     };
 
     struct Config {
         uint32_t valid_SOF{0xA55A5AA5u};
 
         bool     is_calibrated{false};
+        TorqueMode torque_mode{TorqueMode::Current};
 
         uint32_t current_loop_freq{20000}; //Hz
         uint32_t vel_loop_freq{1000}; //Hz
@@ -70,11 +71,11 @@ public:
         uint16_t ticks_per_isr{320};
 
         float max_voltage{16.0f}; // Volts
-        float max_current{2.0f}; // Amps
+        float max_current{0.3f}; // Amps
         float max_vel{500.0f}; // rpm
 
-        float    i_kp{0.0f};
-        float    i_ki{0.0f};
+        float    i_kp{150.0f};
+        float    i_ki{1.0f};
         float    v_kp{0.13f};
         float    v_ki{0.5f};
         float    p_kp{1.5f};
@@ -88,8 +89,8 @@ public:
         uint16_t offset_b{2048};
         uint16_t offset_c{2048};
 
-        static constexpr uint16_t kEncLutCapacity = 512;
-        int16_t  enc_err_lut[kEncLutCapacity] = {0};
+        static constexpr uint16_t kEncLutSize = 512;
+        int32_t  enc_err_lut[kEncLutSize] = {0};
 
         uint32_t valid_EOF{0x5AA5A55Au};
     };
@@ -101,6 +102,8 @@ public:
     void set_current_loop_freq(uint32_t hz);
     void set_velocity_loop_freq(uint32_t hz);
     void init();
+
+    void set_zero();
 
     void arm();
     void disarm();
@@ -134,5 +137,10 @@ public:
 private:
     Config cfg_{};
     Status status_{};
+
+    uint16_t lut_cal_count[512];
+    bool     lut_cal_on{false};
+
+    uint16_t apply_encoder_correction(uint16_t raw) const;
 };
 

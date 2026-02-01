@@ -30,7 +30,7 @@ struct FOCstatus
 
     float Vq{0.0f};
     float Vd{0.0f};
-    float vbat{0.0f};
+    float vbus{0.0f};
 
     float TarId{0.0f};
     float TarIq{0.0f};

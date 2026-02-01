@@ -41,11 +41,98 @@ bool EncoderAS5047P::init() {
     delay_us_1();
     updateAngle();
     delay_us_1();
-    data_.rectifyValid = (lut_ != nullptr);
     tick_ = reinterpret_cast<const volatile uint32_t*>(&TIM2->CNT);
     return true;
 }
+uint16_t EncoderAS5047P::updateAngle() {
+    uint16_t rx = 0;
+    uint16_t tx = 0;
 
+    SPI2->CR1 |= SPI_CR1_SPE;
+
+    bool ok = false;
+    for (int attempt = 0; attempt < 3 && !ok; ++attempt) {
+
+        tx = buildCommandAS5047();
+        GPIOB->BSRR = (uint32_t)GPIO_PIN_12 << 16U;
+
+        while (!(SPI2->SR & SPI_SR_TXE));
+        SPI2->DR = tx;
+        while (!(SPI2->SR & SPI_SR_RXNE));
+        rx = SPI2->DR;
+        while (SPI2->SR & SPI_SR_BSY);
+
+        GPIOB->BSRR = GPIO_PIN_12;
+
+        delay_us_1();
+
+        tx = 0x000u;
+        GPIOB->BSRR = (uint32_t)GPIO_PIN_12 << 16U;
+
+        while (!(SPI2->SR & SPI_SR_TXE));
+        SPI2->DR = tx;
+        while (!(SPI2->SR & SPI_SR_RXNE));
+        rx = SPI2->DR;
+        while (SPI2->SR & SPI_SR_BSY);
+
+        GPIOB->BSRR = GPIO_PIN_12;
+
+        ok = (calcEvenParity(rx) == 0);
+    }
+
+    if (!ok) {
+        return data_.rawAngle;
+    }
+
+    const uint16_t raw14 = align14(rx);
+    data_.rawAngle = raw14;
+    data_.degrees = counts_to_deg(data_.rawAngle);
+    data_.radians = counts_to_rad(data_.rawAngle);
+    if (tick_) {
+        data_.tstamp = *tick_;
+    }
+
+    return data_.rawAngle;
+}
+
+uint16_t EncoderAS5047P::readDiaagc() {
+    constexpr uint16_t DIAAGC_ADDR = 0x3FFCu;
+    uint16_t rx = 0, tx = 0;
+    bool ok = false;
+
+    SPI2->CR1 |= SPI_CR1_SPE;
+
+    for (int attempt = 0; attempt < 3 && !ok; ++attempt) {
+        uint16_t cmd = static_cast<uint16_t>((1u << 14) | DIAAGC_ADDR);
+        cmd |= static_cast<uint16_t>(calcEvenParity(cmd) << 15);
+
+        GPIOB->BSRR = (uint32_t)GPIO_PIN_12 << 16U;
+        while (!(SPI2->SR & SPI_SR_TXE));
+        SPI2->DR = cmd;
+        while (!(SPI2->SR & SPI_SR_RXNE));
+        rx = SPI2->DR;
+        while (SPI2->SR & SPI_SR_BSY);
+        GPIOB->BSRR = GPIO_PIN_12;
+
+        delay_us_1();
+
+        tx = 0x0000u;
+        GPIOB->BSRR = (uint32_t)GPIO_PIN_12 << 16U;
+        while (!(SPI2->SR & SPI_SR_TXE));
+        SPI2->DR = tx;
+        while (!(SPI2->SR & SPI_SR_RXNE));
+        rx = SPI2->DR;
+        while (SPI2->SR & SPI_SR_BSY);
+        GPIOB->BSRR = GPIO_PIN_12;
+
+        ok = (calcEvenParity(rx) == 0);
+    }
+
+    if (!ok) return 0xFFFFu;
+    return align14(rx);
+}
+
+/*
 uint16_t EncoderAS5047P::updateAngle() {
     uint16_t rx = 0;
     uint16_t tx = 0;
@@ -69,19 +156,18 @@ uint16_t EncoderAS5047P::updateAngle() {
     }
 
     if (!ok) {
-        return data_.rectifiedAngle;
+        return data_.rawAngle;
     }
 
     const uint16_t raw14 = align14(rx);
     data_.rawAngle = raw14;
-    data_.rectifiedAngle = (data_.rectifyValid && lut_ != nullptr) ? lut_[raw14] : raw14;
-    data_.degrees = counts_to_deg(data_.rectifiedAngle);
-	data_.radians = counts_to_rad(data_.rectifiedAngle);
+    data_.degrees = counts_to_deg(data_.rawAngle);
+	data_.radians = counts_to_rad(data_.rawAngle);
     if (tick_) {
         data_.tstamp = *tick_;
     }
 
-    return data_.rectifiedAngle;
+    return data_.rawAngle;
 }
 
 uint16_t EncoderAS5047P::readDiaagc() {
@@ -109,6 +195,6 @@ uint16_t EncoderAS5047P::readDiaagc() {
     if (!ok) return 0xFFFFu;
     return align14(rx);
 }
-
+*/
 
 

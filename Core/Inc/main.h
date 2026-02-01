@@ -88,8 +88,14 @@ void Error_Handler(void);
 #define VBAT_SENSE_GPIO_Port GPIOB
 #define AUX_CS_SPI2_Pin GPIO_PIN_11
 #define AUX_CS_SPI2_GPIO_Port GPIOB
+#define Encoder_CS_Pin GPIO_PIN_12
+#define Encoder_CS_GPIO_Port GPIOB
 #define LED_IND_Pin GPIO_PIN_6
 #define LED_IND_GPIO_Port GPIOC
+#define GPIO_IND1_Pin GPIO_PIN_15
+#define GPIO_IND1_GPIO_Port GPIOA
+#define GPIO_IND2_Pin GPIO_PIN_10
+#define GPIO_IND2_GPIO_Port GPIOC
 #define BOOT0_Pin GPIO_PIN_8
 #define BOOT0_GPIO_Port GPIOB
 

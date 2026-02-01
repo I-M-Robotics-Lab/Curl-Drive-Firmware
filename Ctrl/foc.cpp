@@ -40,21 +40,21 @@ ABC InClarkeTransform(float alpha, float beta) noexcept
 
 DQ ParkTransform(float alpha, float beta) noexcept
 {
-    const float c = trig::cos(status.currTheta);
-    const float s = trig::sin(status.currTheta);
+    trig::SC sc = trig::get_sin_cos(status.currTheta);
+
     DQ out;
-    out.d =  alpha * c + beta * s;
-    out.q = -alpha * s + beta * c;
+    out.d =  alpha * sc.cos + beta * sc.sin;
+    out.q = -alpha * sc.sin + beta * sc.cos;
     return out;
 }
 
 AB InParkTransform(float d, float q) noexcept
 {
-    const float c = trig::cos(status.currTheta);
-    const float s = trig::sin(status.currTheta);
+    trig::SC sc = trig::get_sin_cos(status.currTheta);
+
     AB out;
-    out.a = d * c - q * s;
-    out.b = d * s + q * c;
+    out.a = d * sc.cos - q * sc.sin;
+    out.b = d * sc.sin + q * sc.cos;
     return out;
 }
 
