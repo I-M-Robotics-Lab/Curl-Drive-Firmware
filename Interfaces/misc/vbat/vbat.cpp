@@ -1,8 +1,8 @@
-#include <misc/pwr/pwr.hpp>
+#include "vbat.hpp"
 
 extern volatile uint16_t g;
 
-namespace pwr {
+namespace vbat {
 
 	static constexpr uint16_t kFS = 4095;
 	static constexpr float kVref = 3.3f;

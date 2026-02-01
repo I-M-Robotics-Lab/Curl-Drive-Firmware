@@ -2,7 +2,7 @@
 #include <adc.h>
 #include <stm32g4xx_hal.h>
 
-namespace pwr {
+namespace vbat {
 
 	void init();
 	uint16_t raw();

@@ -59,8 +59,6 @@ public:
     bool setCoast();
     bool setBrake();
     bool setRun();
-    bool onhighz();
-    bool offhighz();
 
     int  mode() const { return mode_; }
     const Config& config() const { return cfg_; }

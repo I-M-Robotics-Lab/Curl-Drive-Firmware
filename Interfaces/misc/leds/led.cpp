@@ -37,4 +37,10 @@ void stopToggle() {
     HAL_GPIO_WritePin(LED_IND_GPIO_Port, LED_IND_Pin, GPIO_PIN_RESET);
 }
 
+extern "C" void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* h) {
+    if (h->Instance == TIM7) {
+        HAL_GPIO_TogglePin(LED_IND_GPIO_Port, LED_IND_Pin);
+    }
+}
+
 }

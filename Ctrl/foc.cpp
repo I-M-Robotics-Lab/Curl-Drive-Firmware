@@ -7,6 +7,7 @@ namespace foc
 {
 
 FOCstatus status{};
+static FOCconfig config{};
 
 static inline uint16_t tim1_arr() {
     return __HAL_TIM_GET_AUTORELOAD(&htim1);
@@ -15,6 +16,8 @@ static inline uint16_t tim1_arr() {
 static inline float clampf(float x, float lo, float hi) {
     return x < lo ? lo : (x > hi ? hi : x);
 }
+
+
 
 AB ClarkeTransform() noexcept
 {
@@ -40,21 +43,21 @@ ABC InClarkeTransform(float alpha, float beta) noexcept
 
 DQ ParkTransform(float alpha, float beta) noexcept
 {
-    trig::SC sc = trig::get_sin_cos(status.currTheta);
-
+    const float c = trig::cos(status.currTheta);
+    const float s = trig::sin(status.currTheta);
     DQ out;
-    out.d =  alpha * sc.cos + beta * sc.sin;
-    out.q = -alpha * sc.sin + beta * sc.cos;
+    out.d =  alpha * c + beta * s;
+    out.q = -alpha * s + beta * c;
     return out;
 }
 
 AB InParkTransform(float d, float q) noexcept
 {
-    trig::SC sc = trig::get_sin_cos(status.currTheta);
-
+    const float c = trig::cos(status.currTheta);
+    const float s = trig::sin(status.currTheta);
     AB out;
-    out.a = d * sc.cos - q * sc.sin;
-    out.b = d * sc.sin + q * sc.cos;
+    out.a = d * c - q * s;
+    out.b = d * s + q * c;
     return out;
 }
 
@@ -72,13 +75,8 @@ void InDqTransform() noexcept
 {
     AB ab = ClarkeTransform();
     DQ dq = ParkTransform(ab.a, ab.b);
-
-    // filter
-    status.Id = status.prevId + status.cur_alpha * (dq.d - status.prevId);
-    status.Iq = status.prevIq + status.cur_alpha * (dq.q - status.prevIq);
-    status.prevId = status.Id;
-    status.prevIq = status.Iq;
-
+    status.Id = dq.d;
+    status.Iq = dq.q;
 }
 
 void DqTransform() noexcept
@@ -88,5 +86,25 @@ void DqTransform() noexcept
     svpwm(abc.a, abc.b, abc.c);
 }
 
+
+void currentLoop() noexcept
+{
+    const uint32_t now = status.currT;
+    const uint32_t d   = now - status.prevT;
+    const float dt     = static_cast<float>(d) * 1.25e-7f;
+
+    InDqTransform();
+
+    const float ed = status.TarId - status.Id;
+    const float eq = status.TarIq - status.Iq;
+
+    status.i_int_d += config.i_ki * ed * dt;
+    status.i_int_q += config.i_ki * eq * dt;
+
+    status.Vd = config.i_kp * ed + status.i_int_d;
+    status.Vq = config.i_kp * eq + status.i_int_q;
+
+    DqTransform();
+}
 
 }

@@ -61,7 +61,6 @@ static inline bool parse_flag_token(char* tok, std::string_view& key, int& iv, f
     }
     return true;
 }
-
 static inline void handleline(
     char* line,
     char* keybuf, size_t keybuf_cap, size_t& keylen_out,
@@ -113,239 +112,173 @@ static inline void cmd_welcome()         { usb::println("Welcome"); }
 static inline void cmd_help()            { usb::println("Help"); }
 
 // TEMP
-static inline void cmd_sys_temp(FlagsView flags) {
-    int d;
-    if (flags.get("raw", d) || flags.get("r", d)) { usb::println(static_cast<uint32_t>(temp::raw())); return; }
-    bool k = flags.get("k", d) || flags.get("kelvin", d);
-    bool f = flags.get("f", d) || flags.get("fahrenheit", d);
-    const char* u = k ? " K" : (f ? " F" : " C");
-    float v = k ? temp::kelvin() : (f ? temp::fahrenheit() : temp::celcius());
-    usb::println("TEMP: ", v, u);
+static inline void cmd_temp_raw()        { usb::println(static_cast<uint32_t>(temp::raw())); }
+static inline void cmd_temp_kelvin()     { usb::println("TEMP: ", temp::kelvin(),     " K"); }
+static inline void cmd_temp_celcius()    { usb::println("TEMP: ", temp::celcius(),    " C"); }
+static inline void cmd_temp_fahrenheit() { usb::println("TEMP: ", temp::fahrenheit(), " F"); }
+
+// VBAT
+static inline void cmd_power_raw()       { usb::println(static_cast<uint32_t>(vbat::raw())); }
+static inline void cmd_power_voltage()   { usb::println("VBAT: ", vbat::volts(), " V"); }
+
+// LED
+static inline void cmd_led(FlagsView flags) {
+    int v;
+    if (flags.get("off", v)) { led::stopToggle(); led::setLed(false); return; }
+    if (flags.get("on",  v)) { led::stopToggle(); led::setLed(true);  return; }
 }
 
-// POWER
-static inline void cmd_sys_pwr(FlagsView flags) {
-    int d;
-    if (flags.get("raw", d) || flags.get("r", d)) { usb::println(static_cast<uint32_t>(pwr::raw())); return; }
-    usb::println("V_bus: ", pwr::volts(), " V");
+static inline void cmd_led_toggle(FlagsView flags) {
+    int v;
+    if (flags.get("off", v)) { led::stopToggle(); return; }
+    if (flags.get("start", v)) {
+        int hzInt;
+        if (flags.get("freq", hzInt)) { led::startToggle(static_cast<float>(hzInt)); }
+        else                           { led::startToggle(); }
+        return;
+    }
 }
 
-// LED Status
-static inline void cmd_sys_led(FlagsView flags) {
-    int v, d;
-    if (flags.get("on", d))    { led::stopToggle(); led::setLed(true);  return; }
-    if (flags.get("off", d))   { led::stopToggle(); led::setLed(false); return; }
-    if (flags.get("stop", d))  { led::stopToggle(); led::setLed(false); return; }
-    if (flags.get("set", v))   { led::stopToggle(); led::setLed(v != 0); return; }
-    if (flags.get("blink", v)) { led::startToggle(static_cast<float>(v)); return; }
-}
-
-// Gate Driver Status
-static inline void cmd_view_drv(FlagsView flags) {
+// driver
+static inline void cmd_drv_status(FlagsView flags)
+{
     Driver8323s::Status s{};
-    if (!drv.readStatus(s)) { usb::println("DRV: ERR_READ_FAIL"); return; }
-    int d;
-    if (flags.get("all", d) || flags.get("a", d)) {
-        auto b11 = [](uint16_t x) {
-            static char b[12];
-            for (int i = 0; i < 11; ++i) b[i] = ((x >> (10 - i)) & 1u) ? '1' : '0';
-            b[11] = '\0'; return b;
+    if (!drv.readStatus(s)) { usb::println("[DRV8323S] readStatus failed"); return; }
+
+    int v = 0;
+    if (flags.get("all", v)) {
+        auto fmt11 = [](uint16_t x, char* out) {
+            for (int b = 10, i = 0; b >= 0; --b, ++i) out[i] = ((x >> b) & 1u) ? '1' : '0';
+            out[11] = '\0';
         };
-        usb::println("S1:", b11(s.raw_status1), " S2:", b11(s.raw_status2), " C2:", b11(s.raw_ctrl2));
-        usb::println("C3:", b11(s.raw_ctrl3), " C4:", b11(s.raw_ctrl4), " C5:", b11(s.raw_ctrl5), " C6:", b11(s.raw_ctrl6));
+
+        char s1[12], s2[12], c2[12], c3[12], c4[12], c5[12], c6[12];
+        fmt11(s.raw_status1, s1);
+        fmt11(s.raw_status2, s2);
+        fmt11(s.raw_ctrl2,   c2);
+        fmt11(s.raw_ctrl3,   c3);
+        fmt11(s.raw_ctrl4,   c4);
+        fmt11(s.raw_ctrl5,   c5);
+        fmt11(s.raw_ctrl6,   c6);
+
+        usb::println("[DRV8323S] S1=", s1, "  S2=", s2, "  C2=", c2);
+        usb::println("  C3=", c3, "  C4=", c4, "  C5=", c5);
+        usb::println("  C6=", c6);
         return;
     }
-    usb::println("UVLO:", (int)s.uvlo, " CPUV:", (int)s.cp_uv, " OCP:", (int)(s.vds_ocp || s.sa_oc || s.sb_oc || s.sc_oc), " GDF:", (int)s.gdf);
+
+    usb::println(" UVLO=", (int)s.uvlo, " CPUV=", (int)s.cp_uv, " OCP=", (int)(s.vds_ocp || s.sa_oc || s.sb_oc || s.sc_oc), " GDF=", (int)s.gdf);
 }
 
-// Encoder Status
-static inline void cmd_view_enc(FlagsView flags) {
-    int d;
-    const auto& a = encoder.angleData();
-    if (flags.get("diag", d) || flags.get("d", d)) {
-        uint16_t reg = encoder.readDiaagc();
-        if (reg == 0xFFFFu) { usb::println("ENC: ERR_FAIL"); return; }
-        reg = align14(reg) & 0x0FFFu;
-        char b[13]; for (int i = 0; i < 12; ++i) b[i] = (reg & (1u << (11 - i))) ? '1' : '0'; b[12] = '\0';
-        usb::println("DIAG:", b); return;
-    }
-    if (flags.get("raw", d) || flags.get("r", d)) { usb::println("RAW:", (int)a.rawAngle); return; }
-    if (flags.get("deg", d) || flags.get("d", d)) { usb::println("DEG:", a.degrees); return; }
-    if (flags.get("rad", d)) { usb::println("RAD:", a.radians); return; }
-    if (flags.get("elec", d) || flags.get("e", d)) { usb::println("ELEC:", foc::status.currTheta); return; }
-    usb::println("DEG:", a.degrees, " ELEC:", foc::status.currTheta);
+
+// Encoder
+static inline void cmd_enc_diag() {
+    uint16_t v=encoder.readDiaagc(); if(v==0xFFFFu){ usb::println("[AS5047] DIAAGC=READ_FAIL"); return; }
+    v=align14(v)&0x0FFFu; char bits[13]; for(int i=11,k=0;i>=0;--i,++k) bits[k]=(v&(1u<<i))?'1':'0'; bits[12]='\0';
+    usb::println("[AS5047] DIAAGC=",bits);
+}
+static inline void cmd_enc_angle(FlagsView flags) {
+	int v = 0;
+    if (flags.get("raw", v)) { const auto& a = encoder.angleData(); usb::println("[AS5047] rawAngle=", (int)a.rawAngle); }
+    if (flags.get("rec", v)) { const auto& a = encoder.angleData(); usb::println("[AS5047] rectifiedAngle=", (int)a.rectifiedAngle); }
+    if (flags.get("rad", v)) { const auto& a = encoder.angleData(); usb::println("[AS5047] rad=", (int)a.radians); }
+    if (flags.get("deg", v)) { const auto& a = encoder.angleData(); usb::println("[AS5047] deg=", (int)a.degrees); }
+    if (flags.get("elec", v)) { usb::println("[AS5047] electricalAngle=", (int)foc::status.currTheta); }
+    if (flags.get("t", v)) { usb::println("[AS5047] t=", (int)foc::status.currT); }
+    return;
 }
 
-// FOC Status
-static inline void cmd_view_foc(FlagsView flags) {
-    int d;
-    if (flags.get("adc", d) || flags.get("a", d)) { usb::println("IA:", foc::status.cA, " IB:", foc::status.cB, " IC:", foc::status.cC); return; }
-    if (flags.get("dq", d)  || flags.get("i", d)) { usb::println("IQ:", foc::status.Iq, " ID:", foc::status.Id); return; }
-    if (flags.get("out", d) || flags.get("o", d)) { usb::println("VA:", foc::status.phaseA, " VB:", foc::status.phaseB, " VC:", foc::status.phaseC); return; }
-    usb::println("IQ:", foc::status.Iq, " ID:", foc::status.Id, " MECH:", controller.status().curr_mechAng, " ELEC: ", controller.status().elecAng);
+// FOC & controller
+static inline void cmd_enc_is_armed() { usb::println("armed=", controller.isArmed()); }
+static inline void cmd_con_phases() { usb::println("Phase A=", foc::status.phaseA, "  Phase B=", foc::status.phaseB, "  Phase C=", foc::status.phaseC); return; }
+static inline void cmd_con_curr() { usb::println("Iq=", foc::status.Iq, "  Id=", foc::status.Id); return; }
+static inline void cmd_con_angle() { usb::println("Electrical Angle=", foc::status.currTheta); return; }
+static inline void cmd_con_adcoffset() { usb::println("offset_A=", controller.config().offset_a, "  offset_B=", controller.config().offset_b, "  offset_C=", controller.config().offset_c); return; }
+static inline void cmd_con_adc() { usb::println("cA=", foc::status.cA, "  cB=", foc::status.cB, "  cC=", foc::status.cC); return; }
+static inline void cmd_con_mode() {
+    const char* m = (controller.status().mode == Controller::Mode::Run) ? "Run" : "Calibrating";
+    usb::println("Mode=", m);
 }
 
-// Controller Status
-static inline void cmd_ctrl_state(FlagsView flags) {
-    int d;
-    auto& s = controller.status();
-    bool f = (flags.get("v", d) || flags.get("vel", d) || flags.get("velocity", d));
-    if (f) usb::println("VEL:", s.curr_vel, " TARGET:", s.TarVel, " REV:", s.revolution_count);
+static inline void cmd_con_config(FlagsView flags) {
+    auto& cfg = controller.config();
+    int v = 0;
+    if (flags.get("pid", v)) usb::println("pid:", " i_kp:", cfg.i_kp, ", i_ki:", cfg.i_ki, ", v_kp:", cfg.v_kp, ", v_ki:", cfg.v_ki, ", p_kp:", cfg.p_kp, ", p_ki:", cfg.p_ki);
+    if (flags.get("freq", v)) usb::println("freq:", cfg.current_loop_freq, " Hz");
+    if (flags.get("pp", v))   usb::println("pp:", cfg.pole_pairs);
+    if (flags.get("sgn", v))  usb::println("sgn:", int(cfg.elec_s));
+    if (flags.get("eoff", v)) usb::println("eoff:", cfg.elec_offset);
+    if (flags.get("rsh", v))  usb::println("rsh:", cfg.shunt_res, " ohm");
+    if (flags.get("adcg", v)) usb::println("adcg:", cfg.adc_gain);
+    if (flags.get("vmax", v)) usb::println("vmax:", cfg.max_voltage, " V");
+    if (flags.get("imax", v)) usb::println("imax:", cfg.max_current, " A");
+    if (flags.get("all", v)) usb::println("freq:", cfg.current_loop_freq, " Hz, pp:", cfg.pole_pairs, ", sgn:", int(cfg.elec_s), ", eoff:", cfg.elec_offset, ", rsh:", cfg.shunt_res, " ohm, adcg:", cfg.adc_gain, ", vmax:", cfg.max_voltage, " V, imax:", cfg.max_current, " A");
+}
+static inline void cmd_con_config_write(FlagsView flags) {
+	auto& cfg = controller.config();
+    int freq_i, pp_i, eoff_i, sgn_i;
+    float rsh_f, adcg_f, vmax_f, imax_f, ikp_f, iki_f, vkp_f, vki_f, pkp_f, pki_f;
 
-    if (flags.get("p", d) || flags.get("pos", d) || flags.get("position", d)) {
-        usb::println("POS:", s.curr_pos, " TARGET:", s.TarPos, " REV:", s.revolution_count); f = true;
-    }
-    if (flags.get("t", d) || flags.get("trq", d) || flags.get("torque", d)) {
-        usb::println("TarId:", foc::status.TarId, " TarIq:", foc::status.TarIq, " Vd:", foc::status.Vd, " Vq:", foc::status.Vq); f = true;
-    }
+    if (flags.get("freq", freq_i)) { cfg.current_loop_freq = static_cast<uint32_t>(freq_i); controller.set_current_loop_freq(cfg.current_loop_freq); }
+    if (flags.get("pp",   pp_i))   { cfg.pole_pairs  = static_cast<uint16_t>(pp_i); }
+    if (flags.get("sgn",  sgn_i))  { cfg.elec_s      = static_cast<int8_t>(sgn_i); }
+    if (flags.get("eoff", eoff_i)) { cfg.elec_offset = static_cast<uint16_t>(eoff_i & 0x3FFF); }
+    if (flags.get("rsh",  rsh_f))  cfg.shunt_res   = rsh_f;
+    if (flags.get("adcg", adcg_f)) cfg.adc_gain    = adcg_f;
+    if (flags.get("vmax", vmax_f)) cfg.max_voltage = vmax_f;
+    if (flags.get("imax", imax_f)) cfg.max_current = imax_f;
+    if (flags.get("ikp",  ikp_f))  cfg.i_kp = ikp_f;
+    if (flags.get("iki",  iki_f))  cfg.i_ki = iki_f;
+    if (flags.get("vkp",  vkp_f))  cfg.v_kp = vkp_f;
+    if (flags.get("vki",  vki_f))  cfg.v_ki = vki_f;
+    if (flags.get("pkp",  pkp_f))  cfg.p_kp = pkp_f;
+    if (flags.get("pki",  pki_f))  cfg.p_ki = pki_f;
 
-    if (!f) {
-        const char* m[] = {"IDLE", "TRQ", "VEL", "POS", "CAL"};
-        const char* tm = (controller.config().torque_mode == Controller::TorqueMode::Voltage) ? "VOLT" : "CURR";
-        usb::println("MODE:", m[int(s.mode)], " TYPE:", tm, " ARMED:", (int)s.armed, " CALIB:", (int)s.isCalibrated);
-    }
+    (void)controller.config_write();
 }
 
-// Controller Control
-static inline void cmd_ctrl_set(FlagsView flags) {
-    float v, vd = 0.0f, vq = 0.0f;
-
-    if (flags.get("v", v) || flags.get("vel", v) || flags.get("velocity", v)) { controller.set_velocity(v); return; }
-    if (flags.get("p", v) || flags.get("pos", v) || flags.get("position", v)) { controller.set_position(v); return; }
-    if (flags.get("t", v) || flags.get("trq", v) || flags.get("torque", v))   { controller.set_torque(0, v / 1000.0f); } //turn input from mA to A
-
-    if (flags.get("Vd", vd) || flags.get("Vq", vq)) {
-        flags.get("Vd", vd); flags.get("Vq", vq);
-        controller.set_torque(vd, vq);
-        return;
-    }
+static inline void cmd_con_set(FlagsView flags) {
+	float vd, vq = 0;
+	if (flags.get("Vd", vd)) { foc::status.Vd = vd; }
+	if (flags.get("Vq", vq)) { foc::status.Vq = vq; }
+	return;
 }
-
-// Set Zero point
-static inline void cmd_ctrl_setzero() {
-	controller.set_zero();
-    usb::println("ZEROED");
-}
-
-// IDLE motor
-static inline void cmd_ctrl_idle() {
-    controller.status().mode = Controller::Mode::Idle;
-    usb::println("IDLE");
-}
-
-// Arm motor
-static inline void cmd_ctrl_arm() {
-	controller.arm();
-	usb::println("ARM");
-}
-
-// Disarm motor
-static inline void cmd_ctrl_disarm() {
-	controller.disarm();
-	usb::println("DISARM");
-}
-
-// Calibrate Cycle
-static inline void cmd_ctrl_cal() {
-    controller.calibrate();
-}
-
-// Get Config Parameters
-static inline void cmd_conf_get(FlagsView flags) {
-    auto& c = controller.config();
-    int d;
-
-    if (flags.get("pid", d)) 	   { usb::println("I_PI=", c.i_kp, "/", c.i_ki, ", V_PI=", c.v_kp, "/", c.v_ki, ", P_PID=", c.p_kp, "/", c.p_ki, "/", c.p_kd); return; }
-    if (flags.get("lim", d)) 	   { usb::println("VMAX=", c.max_voltage, ", IMAX=", c.max_current, ", VELMAX=", c.max_vel); return; }
-    if (flags.get("hw", d))        { usb::println("PP=", c.pole_pairs, ", RSH=", c.shunt_res, ", ADCG=", c.adc_gain, ", SGN=", (int)c.elec_s); return; }
-    if (flags.get("freq", d)) 	   { usb::println("CFREQ=", c.current_loop_freq, ", VFREQ=", c.vel_loop_freq); return; }
-
-    if (flags.get("pp", d))        { usb::println("PP=", c.pole_pairs); return; }
-    if (flags.get("sgn", d))       { usb::println("SGN=", (int)c.elec_s); return; }
-    if (flags.get("eoff", d))      { usb::println("EOFF=", c.elec_offset); return; }
-    if (flags.get("rsh", d))       { usb::println("RSH=", c.shunt_res); return; }
-    if (flags.get("adcg", d))      { usb::println("ADCG=", c.adc_gain); return; }
-    if (flags.get("valpha", d))    { usb::println("VEL_ALPHA=", c.vel_alpha); return; }
-    if (flags.get("palpha", d))    { usb::println("POS_ALPHA=", c.pos_alpha); return; }
-
-    if (flags.get("all", d)) {
-        usb::println("HW: PP=", c.pole_pairs, ", SGN=", (int)c.elec_s, ", RSH=", c.shunt_res, ", ADCG=", c.adc_gain);
-        usb::println("LOOP: C=", c.current_loop_freq, ", V=", c.vel_loop_freq, ", EOFF=", c.elec_offset);
-        usb::println("PID: I=", c.i_kp, "/", c.i_ki, ", V=", c.v_kp, "/", c.v_ki, ", P=", c.p_kp, "/", c.p_ki, "/", c.p_kd);
-        usb::println("LIM: V=", c.max_voltage, ", I=", c.max_current, ", VEL=", c.max_vel);
-        usb::println("FILT: V_A=", c.vel_alpha, ", P_A=", c.pos_alpha);
-    }
-}
-
-static inline void cmd_conf_set(FlagsView flags) {
-    auto& c = controller.config();
-    float fv;
-    int iv;
-
-    if (flags.get("ikp", fv)) { c.i_kp = fv; }
-    if (flags.get("iki", fv)) { c.i_ki = fv; }
-    if (flags.get("vkp", fv)) { c.v_kp = fv; }
-    if (flags.get("vki", fv)) { c.v_ki = fv; }
-    if (flags.get("pkp", fv)) { c.p_kp = fv; }
-    if (flags.get("pki", fv)) { c.p_ki = fv; }
-    if (flags.get("pkd", fv)) { c.p_kd = fv; }
-
-    if (flags.get("valpha", fv)) { c.vel_alpha = fv; }
-    if (flags.get("palpha", fv)) { c.pos_alpha = fv; }
-
-    if (flags.get("vmax", fv))   { c.max_voltage = fv; }
-    if (flags.get("imax", fv))   { c.max_current = fv; }
-    if (flags.get("velmax", fv)) { c.max_vel = fv; }
-
-    if (flags.get("rsh", fv))    { c.shunt_res = fv; }
-    if (flags.get("adcg", fv))   { c.adc_gain = fv; }
-    if (flags.get("pp", iv))     { c.pole_pairs = static_cast<uint16_t>(iv); }
-    if (flags.get("sgn", iv))    { c.elec_s = static_cast<int8_t>(iv); }
-    if (flags.get("eoff", iv))   { c.elec_offset = static_cast<uint16_t>(iv & 0x3FFF); }
-
-    if (flags.get("cfreq", iv)) {
-        c.current_loop_freq = static_cast<uint32_t>(iv);
-        controller.set_current_loop_freq(c.current_loop_freq);
-    }
-    if (flags.get("vfreq", iv)) {
-        c.vel_loop_freq = static_cast<uint32_t>(iv);
-        controller.set_velocity_loop_freq(c.vel_loop_freq);
-    }
-
-    if (controller.config_write()) {
-        usb::println("CONF=WRITE_OK");
-    } else {
-        usb::println("CONF=WRITE_FAIL");
-    }
-}
-
 
 static inline void commands(std::string_view key, FlagsView flags)
 {
     if (key.empty()) return;
+    if (key == "curl-drive")                    { (void)cmd_welcome();         return; }
+    if (key == "curl-drive help")               { (void)cmd_help();            return; }
 
-    if (key == "cdrv")                    { (void)cmd_welcome(); return; }    // print a welcome banner with basic info
-    if (key == "cdrv help")               { (void)cmd_help(); return; }    // print a command table
+    if (key == "curl-drive temp raw")           { (void)cmd_temp_raw();        return; }
+    if (key == "curl-drive temp kelvin")        { (void)cmd_temp_kelvin();     return; }
+    if (key == "curl-drive temp celcius")       { (void)cmd_temp_celcius();    return; }
+    if (key == "curl-drive temp fahrenheit")    { (void)cmd_temp_fahrenheit(); return; }
 
-    if (key == "cdrv sys temp") { cmd_sys_temp(flags); return; } 	// print temperature data
-    if (key == "cdrv sys pwr")  { cmd_sys_pwr(flags);  return; } 	// print power data
-    if (key == "cdrv sys led")  { cmd_sys_led(flags);  return; } 	// control status LED
+    if (key == "curl-drive power raw")          { (void)cmd_power_raw();       return; }
+    if (key == "curl-drive power voltage")      { (void)cmd_power_voltage();   return; }
 
-    if (key == "cdrv view drv") { cmd_view_drv(flags); return; }	// print info about the gate driver
-    if (key == "cdrv view enc") { cmd_view_enc(flags); return; }	// print info about the encoder
-    if (key == "cdrv view foc") { cmd_view_foc(flags); return; }	// print info about the FOC status
+    if (key == "curl-drive led")                { (void)cmd_led(flags);        return; }
+    if (key == "curl-drive led toggle")         { (void)cmd_led_toggle(flags); return; }
 
-    if (key == "cdrv ctrl state")   { cmd_ctrl_state(flags); return; }	// print info about the controller status
-    if (key == "cdrv ctrl set")     { cmd_ctrl_set(flags);   return; }	// set / control the motor
-    if (key == "cdrv ctrl idle")    { cmd_ctrl_idle();       return; }	// send motor into idle state
-    if (key == "cdrv ctrl arm")     { cmd_ctrl_arm();        return; }  // Arm motor
-    if (key == "cdrv ctrl disarm")  { cmd_ctrl_disarm();     return; }  // Disarm motor
-    if (key == "cdrv ctrl zero") { cmd_ctrl_setzero();    return; }  // Set current position as zero
-    if (key == "cdrv ctrl cal")     { cmd_ctrl_cal();        return; }	// start calibration process
+    if (key == "curl-drive driver status")      { (void)cmd_drv_status(flags);      return; }
 
-    if (key == "cdrv conf get") { cmd_conf_get(flags); return; }	// Retrieve Config Parameters
-    if (key == "cdrv conf set") { cmd_conf_set(flags); return; }	// Set Config Parameters
+    if (key == "curl-drive encoder diag")  		{ (void)cmd_enc_diag();    return; }
+    if (key == "curl-drive encoder angle")      { (void)cmd_enc_angle(flags);     return; }
+
+    if (key == "curl-drive controller phases")  { (void)cmd_con_phases(); return; }
+    if (key == "curl-drive controller current") { (void)cmd_con_curr(); return; }
+    if (key == "curl-drive controller angle")   { (void)cmd_con_angle(); return; }
+    if (key == "curl-drive controller adcoffset") { (void)cmd_con_adcoffset(); return; }
+    if (key == "curl-drive controller adc")     { (void)cmd_con_adc(); return; }
+    if (key == "curl-drive controller mode")    { (void)cmd_con_mode(); return; }
+    if (key == "curl-drive controller set")     { (void)cmd_con_set(flags); return; }
+    if (key == "curl-drive controller config")  { (void)cmd_con_config(flags); return; }
+    if (key == "curl-drive controller writeconfig")  { (void)cmd_con_config_write(flags); return; }
 }
+
+
+
 
 void cli_poll()
 {
@@ -363,3 +296,8 @@ void cli_poll()
         commands(key, fv);
     }
 }
+
+
+
+
+

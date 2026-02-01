@@ -50,7 +50,7 @@ std::size_t usb::write(const char* cstr)
   if (!cstr) return 0;
   return usb::write(reinterpret_cast<const uint8_t*>(cstr), std::strlen(cstr));
 }
-/*
+
 bool usb::writeLine(const char* cstr)
 {
   if (!cstr) return false;
@@ -58,21 +58,6 @@ bool usb::writeLine(const char* cstr)
   if (usb::write(reinterpret_cast<const uint8_t*>(cstr), n) != n) return false;
   static const uint8_t crlf[2] = {'\r','\n'};
   return usb::write(crlf, 2) == 2;
-}
-*/
-bool usb::writeLine(const char* cstr)
-{
-  if (!cstr) return false;
-  const std::size_t n = std::strlen(cstr);
-
-  static char combined[512];
-  if (n >= sizeof(combined) - 2) return false;
-
-  std::memcpy(combined, cstr, n);
-  combined[n] = '\r';
-  combined[n + 1] = '\n';
-
-  return usb::write(reinterpret_cast<const uint8_t*>(combined), n + 2) == (n + 2);
 }
 
 std::size_t usb::available()

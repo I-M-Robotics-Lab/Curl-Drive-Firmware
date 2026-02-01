@@ -16,7 +16,7 @@ void Main();
 #include <cstdio>
 #include <charconv>
 #include <misc/leds/led.hpp>
-#include <misc/pwr/pwr.hpp>
+#include <misc/vbat/vbat.hpp>
 #include <misc/temp/temp.hpp>
 #include <usbs/usb.hpp>
 #include <as5047_encoder.hpp>
