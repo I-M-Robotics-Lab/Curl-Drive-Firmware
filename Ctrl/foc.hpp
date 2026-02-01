@@ -7,20 +7,6 @@
 namespace foc
 {
 
-struct FOCconfig
-{
-    float i_kp{0.0f};
-    float i_ki{0.0f};
-    float v_kp{0.0f};
-    float v_ki{0.0f};
-    float p_kp{0.0f};
-    float p_ki{0.0f};
-
-
-    float shunt_res = {0.003f};
-    uint16_t adc_gain = {40};
-};
-
 struct FOCstatus
 {
     uint16_t currTheta{0};
@@ -38,10 +24,13 @@ struct FOCstatus
 
     float Iq{0.0f};
     float Id{0.0f};
+    float prevIq{0.0f};
+    float prevId{0.0f};
+    float cur_alpha{0.2f};
 
     float Vq{0.0f};
     float Vd{0.0f};
-    float vbat{0.0f};
+    float vbus{0.0f};
 
     float TarId{0.0f};
     float TarIq{0.0f};
@@ -72,7 +61,6 @@ AB  InParkTransform(float d, float q) noexcept;
 void InDqTransform() noexcept;
 void DqTransform() noexcept;
 void svpwm(float a, float b, float c) noexcept;
-
-void currentLoop();
+void filter_currents() noexcept;
 
 }

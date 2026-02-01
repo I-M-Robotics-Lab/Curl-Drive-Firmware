@@ -11,7 +11,7 @@ void Main() {
     HAL_TIM_Base_Start(&htim1);
     HAL_TIM_Base_Start(&htim2);
 
-    vbat::init();
+    pwr::init();
     temp::init();
 
     Controller::Config cfg{};
@@ -22,11 +22,10 @@ void Main() {
     controller.init();
 
     usb::println("line echo ready");
-    led::startToggle(20);
+    led::startToggle(30);
     HAL_Delay(500);
     led::stopToggle();
 
-    //controller.startCalibrate();
     led::setLed(!ok ? 1 : 0);
     HAL_Delay(1000);
 
@@ -36,24 +35,23 @@ void Main() {
 
         if (g_drv_fault_irq) {
             g_drv_fault_irq = false;
-            //controller.setCoast();
+            //controller.disarm();
             usb::println("[DRV8323S] nFAULT asserted — check: curl-drive driver status");
         }
 
         //foc::status.Vd = 10;
         //foc::status.Vq = 0;
 
-        //usb::println(",a=", foc::status.currTheta);
-        //usb::println(", Iq = ", foc::status.Iq);
+        //usb::println("No LUT = ", controller.status().raw_mechAng, ", LUT = ", controller.status().curr_mechAng);
+        //usb::println("Angle = ", controller.status().curr_pos_raw, ", Angle1 = ", controller.status().curr_pos);
+        usb::println("Id = ", foc::status.Id, ", Iq = ", foc::status.Iq);
         //usb::println("cA = ", foc::status.cA, ", cB = ", foc::status.cB, ", cC = ", foc::status.cC);
-        //foc::status.phaseA = 9;
-        //foc::status.phaseA = -4.5;
-        //foc::status.phaseA = -4.5;
-
-        controller.execute();
+        //usb::println("fv = ", controller.status().curr_vel, ", tv = ", controller.status().TarVel);
+        //usb::println("rev = ", controller.status().revolution_count, ", mech = ", controller.status().curr_mechAng, ", pos = ", controller.status().curr_pos);
+        //usb::println("pos =", controller.status().curr_pos, ", tarpos =", controller.status().TarPos);
 
         cli_poll();
-        HAL_Delay(50);
+        HAL_Delay(20);
     }
 }
 

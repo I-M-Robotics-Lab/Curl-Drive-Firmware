@@ -1,13 +1,128 @@
+CURL-DRIVE CLI MANUAL
+================================================================================
 
-curl-drive
-curl-drive temp raw
-curl-drive temp kelvin
-curl-drive temp celcius
-curl-drive temp Fahrenheit
-curl-drive power raw
-curl-drive power voltage
-curl-drive led --on
-curl-drive led --off
-curl-drive led toggle --off
-curl-drive led toggle --start --freq=<int>
-curl-drive driver status
+This document is the definitive technical reference for the CURL-DRIVE CLI.
+The interface is hierarchical: Root -> Group -> Command -> Flag.
+
+I. GRAMMAR RULES
+----------------
+1. Identifiers: Use '-' or '--' prefixes (interchangeable).
+2. Assignment : Use '=' with no spaces. Example: --vel=1000 or --ikp=0.05.
+
+
+II. COMMAND REFERENCE
+---------------------
+
+cdrv      : Returns welcome banner, version, and hardware info.
+cdrv help : Displays help table.
+
+cdrv sys temp : MCU Internal Temperature.
+  --raw | -r    : Returns 12-bit ADC integer.
+  --kelvin | -k : Returns temperature in Kelvin.
+  --fahrenheit| -f: Returns temperature in Fahrenheit.
+  (No Flag)     : Returns temperature in Celsius.
+
+cdrv sys pwr : DC Bus Voltage.
+  --raw | -r    : Returns raw 12-bit ADC counts from divider.
+  (No Flag)     : Returns bus voltage in Volts (V).
+
+cdrv sys led : Status LED manual control.
+  --on          : Sets LED to solid ON.
+  --off         : Sets LED to solid OFF.
+  --stop        : Stops blinking and turns LED OFF.
+  --set=[0|1]   : 1 for ON, 0 for OFF.
+  --blink=[Hz]  : Toggles LED at specific Hz (e.g., --blink=2.5).
+
+cdrv view drv : Gate Driver SPI status (DRV8323S).
+  --all | -a    : Full 11-bit binary dump of all registers.
+  (No Flag)     : Fault status (UVLO, CPUV, OCP, GDF).
+
+cdrv view enc : Encoder feedback (AS5047).
+  --diag | -d   : 12-bit diagnostic register check.
+  --raw | -r    : 14-bit absolute position (0-16383).
+  --deg         : Mechanical degrees (0.00-359.99).
+  --rad         : Mechanical Radians.
+  --elec | -e   : Current FOC electrical angle.
+  (No Flag)     : Mechanical Degrees and Electrical Angle.
+
+cdrv view foc : FOC Algorithm internal variables.
+  --adc | -a    : Phase currents IA, IB, IC (Amperes).
+  --dq | -i     : Current vectors IQ (Torque) and ID (Flux).
+  --out | -o    : Phase voltages VA, VB, VC (PWM Duty).
+  (No Flag)     : IQ, ID, Mech Angle, and Elec Angle.
+
+GROUP: ctrl (Motion Control)
+Movement commands and state reporting.
+
+cdrv ctrl state : Reports loop telemetry.
+  --vel | -v    : Velocity (RPM), Target RPM, Rev count.
+  --pos | -p    : Position (Deg), Target Deg, Rev count.
+  --trq | -t    : Target Id/Iq and applied Vd/Vq.
+  (No Flag)     : Mode, Torque Type, Armed, Calibration flag.
+
+cdrv ctrl set : Changes mode and updates target.
+  --trq=[val] | -t | -torque : Sets target current mA and enters Torque Mode.
+  --vel=[val] | -v | -velocity : Sets target RPM and enters Velocity Mode.
+  --pos=[val] | -p | -position : Sets target Degrees and enters Position Mode.
+  --Vd=[val]    : Injects manual D-axis Voltage.
+  --Vq=[val]    : Injects manual Q-axis Voltage.
+
+cdrv ctrl idle : Disables inverter and sets mode to IDLE.
+
+cdrv ctrl arm : Checks driver health, clears High-Z, and enables motor.
+
+cdrv ctrl disarm : Forces High-Z state and resets all control variables.
+
+cdrv ctrl zero : Capture current position as volatile 0.0 degree origin.
+
+cdrv ctrl cal : Starts automated motor calibration.
+
+cdrv conf get : Retrieves settings from RAM.
+  --pid         : All gains (I, V, P loops).
+  --lim         : Safety limits (V, I, RPM).
+  --hw          : Hardware info (PP, RSH, ADCG, SGN).
+  --freq        : ISR frequencies (CFREQ, VFREQ).
+  --all         : Full config structure dump.
+  --ikp         : Current loop Proportional gain.
+  --iki         : Current loop Integral gain.
+  --vkp         : Velocity loop Proportional gain.
+  --vki         : Velocity loop Integral gain.
+  --pkp         : Position loop Proportional gain.
+  --pki         : Position loop Integral gain.
+  --pkd         : Position loop Derivative gain.
+  --valpha      : Velocity LPF alpha.
+  --palpha      : Position LPF alpha.
+  --vmax        : Bus overvoltage limit (V).
+  --imax        : Phase overcurrent limit (A).
+  --velmax      : Velocity limit (RPM).
+  --rsh         : Shunt resistance (Ohms).
+  --adcg        : Sense amp gain.
+  --pp          : Motor pole pairs.
+  --sgn         : Phase direction (1 or -1).
+  --eoff        : 14-bit Electrical Offset.
+  --cfreq       : Current loop ISR Hz.
+  --vfreq       : Velocity loop ISR Hz.
+
+cdrv conf set : Modifies and saves settings to Flash.
+  --ikp=[val]   : Sets Current loop Proportional gain.
+  --iki=[val]   : Sets Current loop Integral gain.
+  --vkp=[val]   : Sets Velocity loop Proportional gain.
+  --vki=[val]   : Sets Velocity loop Integral gain.
+  --pkp=[val]   : Sets Position loop Proportional gain.
+  --pki=[val]   : Sets Position loop Integral gain.
+  --pkd=[val]   : Sets Position loop Derivative gain.
+  --valpha=[val]: Sets Velocity filter alpha (0.0-1.0).
+  --palpha=[val]: Sets Position filter alpha (0.0-1.0).
+  --vmax=[val]  : Sets Max Bus Voltage limit.
+  --imax=[val]  : Sets Max Phase Current limit.
+  --velmax=[val]: Sets Max RPM limit.
+  --rsh=[val]   : Sets Shunt resistance.
+  --adcg=[val]  : Sets Sense amp gain.
+  --pp=[val]    : Sets Pole Pairs.
+  --sgn=[val]   : Sets Direction (1 or -1).
+  --eoff=[val]  : Sets Electrical Offset.
+  --cfreq=[val] : Sets Current loop Hz (Re-init timer).
+  --vfreq=[val] : Sets Velocity loop Hz (Re-init timer).
+  
+================================================================================
+================================================================================
