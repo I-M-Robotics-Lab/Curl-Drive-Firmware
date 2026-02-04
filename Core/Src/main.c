@@ -111,7 +111,9 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
-  Main();
+//  Main();
+  main_app();
+
   /* USER CODE END 2 */
 
   /* Infinite loop */

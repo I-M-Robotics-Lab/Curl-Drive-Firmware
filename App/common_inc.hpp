@@ -7,7 +7,9 @@ extern "C" {
 /*---------------------------- C Scope ---------------------------*/
 #include "stdint-gcc.h"
 
-void Main();
+//void Main();
+void main_app();
+
 
 #ifdef __cplusplus
 }
@@ -23,6 +25,7 @@ void Main();
 #include <drv8323s_driver.hpp>
 #include <controller.hpp>
 #include <foc.hpp>
+#include <fd-can/fdcan_comm.hpp>
 
 extern Controller controller;
 extern EncoderAS5047P encoder;
